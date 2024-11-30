@@ -34,7 +34,7 @@ AutoSKL is a comprehensive automated machine learning framework built with FastA
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/autoskl.git
+git clone https://github.com/DSYemen/Windsurf_AutoSKL.git
 cd autoskl
 ```
 
@@ -46,7 +46,7 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 
 3. Install dependencies:
 ```bash
-pip install -r requirements.txt
+pip install -- upgrade -r requirements.txt
 ```
 
 ### Running the Services

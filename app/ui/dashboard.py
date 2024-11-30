@@ -17,6 +17,7 @@ from app.ui.components.notifications import NotificationSystem
 from app.ui.components.interactive_help import InteractiveHelp
 from app.ui.components.model_visualizer import ModelVisualizer
 from app.ui.components.model_comparison import ModelComparer, ModelComparison
+from app.ui.components.data_analyzer import DataAnalyzer as UIDataAnalyzer
 
 # Initialize components
 notification_system = NotificationSystem()
@@ -24,6 +25,7 @@ interactive_help = InteractiveHelp()
 model_visualizer = ModelVisualizer()
 model_comparer = ModelComparer()
 interactive_report = InteractiveReport()
+data_analyzer = UIDataAnalyzer()
 
 st.set_page_config(
     page_title="AutoSKL Dashboard",
@@ -114,63 +116,54 @@ def show_home():
 def show_data_analysis():
     st.header("📊 Data Analysis")
     
-    uploaded_file = st.file_uploader("Upload your dataset (CSV)", type=['csv'])
+    # Help button
+    if interactive_help.show_help_button("data_analysis"):
+        interactive_help.show_help_content("data_analysis")
+    
+    # File upload
+    uploaded_file = st.file_uploader(
+        "Upload your dataset (CSV, Excel)",
+        type=['csv', 'xlsx']
+    )
+    
     if uploaded_file is not None:
-        data = pd.read_csv(uploaded_file)
-        
-        with st.spinner("Analyzing your data..."):
-            analyzer = DataAnalyzer()
-            target_col = st.selectbox("Select target column", data.columns)
-            analysis = analyzer.analyze_dataset(data, target_col, 'auto')
+        try:
+            # Load data
+            if uploaded_file.name.endswith('.csv'):
+                data = pd.read_csv(uploaded_file)
+            else:
+                data = pd.read_excel(uploaded_file)
             
-            # Overview
-            st.subheader("📋 Dataset Overview")
-            col1, col2, col3, col4 = st.columns(4)
-            with col1:
-                st.metric("Rows", analysis['basic_stats']['n_samples'])
-            with col2:
-                st.metric("Columns", analysis['basic_stats']['n_features'])
-            with col3:
-                st.metric("Missing Values", analysis['missing_values']['total_missing'])
-            with col4:
-                st.metric("Memory Usage", f"{analysis['basic_stats']['memory_usage']:.2f} MB")
+            # Store in session state
+            st.session_state.data = data
             
-            # Feature Distribution
-            st.subheader("📊 Feature Distributions")
-            selected_feature = st.selectbox(
-                "Select feature to visualize",
-                analysis['feature_types']['numerical'] + analysis['feature_types']['categorical']
+            # Show success notification
+            notification_system.show_success(
+                f"Successfully loaded dataset with {data.shape[0]} rows and {data.shape[1]} columns"
             )
             
-            if selected_feature in analysis['feature_types']['numerical']:
-                fig = px.histogram(data, x=selected_feature, nbins=30)
-            else:
-                fig = px.bar(data[selected_feature].value_counts())
-            st.plotly_chart(fig, use_container_width=True)
+            # Select target variable
+            target_column = st.selectbox(
+                "Select Target Variable (Optional)",
+                ["None"] + list(data.columns)
+            )
             
-            # Correlations
-            st.subheader("🔄 Feature Correlations")
-            if analysis['correlations'].get('numerical'):
-                corr_data = pd.DataFrame(analysis['correlations']['numerical'])
-                fig = px.imshow(corr_data, color_continuous_scale='RdBu')
-                st.plotly_chart(fig, use_container_width=True)
+            # Analyze data
+            data_analyzer.show_analysis(
+                data,
+                target_column if target_column != "None" else None
+            )
             
-            # Feature Importance
-            st.subheader("🎯 Feature Importance")
-            if analysis['feature_importance']:
-                fig = px.bar(
-                    x=list(analysis['feature_importance'].keys()),
-                    y=list(analysis['feature_importance'].values()),
-                    title="Feature Importance"
-                )
-                st.plotly_chart(fig, use_container_width=True)
+            # Store target column in session state
+            if target_column != "None":
+                st.session_state.target_column = target_column
             
-            # Recommendations
-            st.subheader("💡 Recommendations")
-            recommendations = analyzer.get_recommended_preprocessing()
-            for key, value in recommendations.items():
-                if value:
-                    st.info(f"**{key.title()}**: {value}")
+        except Exception as e:
+            notification_system.show_error(
+                f"Error loading dataset: {str(e)}"
+            )
+    else:
+        st.info("Please upload a dataset to begin analysis")
 
 def show_model_training():
     st.header("🔧 Model Training")

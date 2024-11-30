@@ -46,7 +46,7 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 
 3. Install dependencies:
 ```bash
-pip install -- upgrade -r requirements.txt
+pip install --upgrade -r requirements.txt
 ```
 
 ### Running the Services

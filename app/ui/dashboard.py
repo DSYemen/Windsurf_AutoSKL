@@ -9,6 +9,14 @@ import base64
 from PIL import Image
 import io
 import time
+import sys
+import os
+
+# Add the project root directory to Python path
+project_root = str(Path(__file__).parent.parent.parent)
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
 from app.services.data_analyzer import DataAnalyzer
 from app.services.model_trainer import ModelTrainer
 from app.services.model_evaluator import ModelEvaluator
@@ -21,7 +29,8 @@ from app.ui.components.data_analyzer import DataAnalyzer as UIDataAnalyzer
 
 # Initialize components
 notification_system = NotificationSystem()
-interactive_help = InteractiveHelp()
+help_file_path = str(Path(project_root) / "docs" / "user_guide.md")
+interactive_help = InteractiveHelp(help_file=help_file_path)
 model_visualizer = ModelVisualizer()
 model_comparer = ModelComparer()
 interactive_report = InteractiveReport()
@@ -189,48 +198,75 @@ def show_model_training():
         
         if st.button("Start Training"):
             with st.spinner("Training models..."):
-                trainer = ModelTrainer()
-                X = data.drop(columns=[target_col])
-                y = data[target_col]
-                
-                results = trainer.train(
-                    X.values, y.values,
-                    model_types=selected_models if selected_models else None
-                )
-                
-                st.success("Training completed!")
-                
-                # Show results
-                st.subheader("📊 Training Results")
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.metric("Best Model", results['model_type'])
-                with col2:
-                    st.metric("Score", f"{results['score']:.4f}")
-                
-                # Parameters
-                st.subheader("⚙️ Best Model Parameters")
-                st.json(results['parameters'])
-                
-                # All Results
-                st.subheader("📈 All Models Performance")
-                results_df = pd.DataFrame([
-                    {
-                        'Model': r['model_type'],
-                        'Score': r['score'],
-                        'Suitability': r['suitability']
-                    }
-                    for r in results['all_results']
-                ])
-                
-                fig = px.bar(
-                    results_df,
-                    x='Model',
-                    y='Score',
-                    color='Suitability',
-                    title="Model Performance Comparison"
-                )
-                st.plotly_chart(fig, use_container_width=True)
+                try:
+                    # Data validation
+                    if data.empty:
+                        st.error("Please upload data first!")
+                        return
+                    
+                    if target_col not in data.columns:
+                        st.error(f"Target column '{target_col}' not found in data!")
+                        return
+                        
+                    # Data preprocessing
+                    X = data.drop(columns=[target_col])
+                    y = data[target_col]
+                    
+                    # Check for missing values
+                    if X.isnull().any().any():
+                        st.warning("Data contains missing values. Handling missing values...")
+                        X = X.fillna(X.mean())
+                    
+                    # Convert categorical variables
+                    categorical_cols = X.select_dtypes(include=['object']).columns
+                    if not categorical_cols.empty:
+                        st.info("Converting categorical variables...")
+                        for col in categorical_cols:
+                            X[col] = pd.Categorical(X[col]).codes
+                    
+                    trainer = ModelTrainer()
+                    results = trainer.train(
+                        X.values, y.values,
+                        model_types=selected_models if selected_models else None
+                    )
+                    
+                    st.success("Training completed!")
+                    
+                    # Show results
+                    st.subheader("📊 Training Results")
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.metric("Best Model", results['model_type'])
+                    with col2:
+                        st.metric("Score", f"{results['score']:.4f}")
+                    
+                    # Parameters
+                    st.subheader("⚙️ Best Model Parameters")
+                    st.json(results['parameters'])
+                    
+                    # All Results
+                    st.subheader("📈 All Models Performance")
+                    results_df = pd.DataFrame([
+                        {
+                            'Model': r['model_type'],
+                            'Score': r['score'],
+                            'Suitability': r['suitability']
+                        }
+                        for r in results['all_results']
+                    ])
+                    
+                    fig = px.bar(
+                        results_df,
+                        x='Model',
+                        y='Score',
+                        color='Suitability',
+                        title="Model Performance Comparison"
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+                    
+                except Exception as e:
+                    st.error(f"Error during training: {str(e)}")
+                    st.error("Please check your data and try again.")
 
 def show_model_evaluation():
     st.header("📈 Model Evaluation")

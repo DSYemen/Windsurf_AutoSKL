@@ -1,6 +1,8 @@
-from typing import Dict, List, Any, Optional, Tuple
-import numpy as np
+import streamlit as st
 import pandas as pd
+import numpy as np
+from typing import Dict, List, Any, Optional, Tuple
+import plotly.express as px
 from sklearn.preprocessing import StandardScaler, RobustScaler
 from sklearn.impute import SimpleImputer, KNNImputer
 from feature_engine.outliers import OutlierTrimmer
@@ -32,14 +34,14 @@ class DataAnalyzer:
         target: str,
         task_type: str
     ) -> Dict[str, Any]:
-        """Comprehensive analysis of the dataset"""
+        """تحليل شامل لمجموعة البيانات"""
         self.target_name = target
         analysis = {}
         
-        # Basic statistics
+        # إحصائيات أساسية
         analysis['basic_stats'] = self._compute_basic_stats(data)
         
-        # Feature types detection
+        # اكتشاف أنواع المتغيرات
         self._detect_feature_types(data)
         analysis['feature_types'] = {
             'numerical': self.numerical_features,
@@ -47,33 +49,239 @@ class DataAnalyzer:
             'datetime': self.datetime_features
         }
         
-        # Missing values analysis
+        # تحليل القيم المفقودة
         analysis['missing_values'] = self._analyze_missing_values(data)
-        
-        # Outlier analysis
-        analysis['outliers'] = self._detect_outliers(data)
-        
-        # Feature correlations
-        analysis['correlations'] = self._analyze_correlations(data)
-        
-        # Class imbalance (for classification)
-        if task_type == 'classification':
-            analysis['class_balance'] = self._analyze_class_balance(data[target])
-            
-        # Feature importance (preliminary)
-        analysis['feature_importance'] = self._analyze_feature_importance(
-            data.drop(columns=[target]),
-            data[target],
-            task_type
-        )
-        
-        # Data quality report
-        analysis['quality_report'] = self._generate_quality_report(data)
         
         return analysis
         
+    def show_overview(self, data: pd.DataFrame):
+        """عرض نظرة عامة على البيانات"""
+        st.subheader("📊 نظرة عامة على البيانات")
+        
+        # معلومات أساسية
+        st.write(f"عدد الصفوف: {data.shape[0]}")
+        st.write(f"عدد الأعمدة: {data.shape[1]}")
+        
+        # عرض أول بضعة صفوف
+        st.subheader("🔍 عينة من البيانات")
+        st.dataframe(data.head())
+        
+        # معلومات الأنواع
+        st.subheader("📋 أنواع البيانات")
+        dtypes_df = pd.DataFrame({
+            'النوع': data.dtypes,
+            'القيم الفريدة': data.nunique(),
+            'القيم المفقودة (%)': (data.isnull().sum() / len(data) * 100).round(2)
+        })
+        st.dataframe(dtypes_df)
+        
+        # إحصائيات وصفية
+        st.subheader("📈 إحصائيات وصفية")
+        st.dataframe(data.describe())
+        
+    def show_variable_analysis(self, data: pd.DataFrame):
+        """تحليل تفصيلي للمتغيرات"""
+        st.subheader("🔍 تحليل المتغيرات")
+        
+        # اختيار العمود للتحليل
+        column = st.selectbox("اختر العمود للتحليل", data.columns)
+        
+        if column:
+            col_data = data[column]
+            
+            # معلومات أساسية
+            st.write(f"نوع البيانات: {col_data.dtype}")
+            st.write(f"عدد القيم الفريدة: {col_data.nunique()}")
+            st.write(f"نسبة القيم المفقودة: {(col_data.isnull().sum() / len(col_data) * 100):.2f}%")
+            
+            # تحليل حسب نوع البيانات
+            if np.issubdtype(col_data.dtype, np.number):
+                self._analyze_numerical(col_data)
+            else:
+                self._analyze_categorical(col_data)
+
+    def _analyze_numerical(self, series: pd.Series):
+        """تحليل المتغيرات العددية"""
+        # إحصائيات
+        stats = series.describe()
+        st.write("إحصائيات:")
+        st.write(stats)
+        
+        # رسم توزيع البيانات
+        fig = px.histogram(
+            series,
+            title=f"توزيع {series.name}",
+            labels={'value': series.name, 'count': 'التكرار'}
+        )
+        st.plotly_chart(fig)
+        
+        # رسم box plot
+        fig = px.box(
+            series,
+            title=f"Box Plot - {series.name}"
+        )
+        st.plotly_chart(fig)
+        
+    def _analyze_categorical(self, series: pd.Series):
+        """تحليل المتغيرات الفئوية"""
+        # توزيع القيم
+        value_counts = series.value_counts()
+        st.write("توزيع القيم:")
+        st.write(value_counts)
+        
+        # رسم بياني للتوزيع
+        fig = px.bar(
+            x=value_counts.index,
+            y=value_counts.values,
+            title=f"توزيع {series.name}",
+            labels={'x': series.name, 'y': 'التكرار'}
+        )
+        st.plotly_chart(fig)
+        
+        # نسب القيم
+        st.write("النسب المئوية:")
+        st.write(series.value_counts(normalize=True) * 100)
+        
+    def show_correlations(self, data: pd.DataFrame):
+        """عرض الارتباطات بين المتغيرات"""
+        st.subheader("🔗 تحليل الارتباطات")
+        
+        # حساب مصفوفة الارتباط للمتغيرات العددية
+        numeric_data = data.select_dtypes(include=[np.number])
+        if not numeric_data.empty:
+            corr_matrix = numeric_data.corr()
+            
+            # رسم خريطة حرارية
+            fig = px.imshow(
+                corr_matrix,
+                title="مصفوفة الارتباط",
+                labels=dict(color="معامل الارتباط")
+            )
+            st.plotly_chart(fig)
+            
+            # عرض أقوى الارتباطات
+            st.subheader("🔝 أقوى الارتباطات")
+            correlations = []
+            for col1 in corr_matrix.columns:
+                for col2 in corr_matrix.columns:
+                    if col1 < col2:
+                        correlations.append({
+                            'المتغير 1': col1,
+                            'المتغير 2': col2,
+                            'معامل الارتباط': corr_matrix.loc[col1, col2]
+                        })
+            
+            if correlations:
+                corr_df = pd.DataFrame(correlations)
+                corr_df = corr_df.sort_values('معامل الارتباط', key=abs, ascending=False)
+                st.dataframe(corr_df)
+        else:
+            st.warning("لا توجد متغيرات عددية لحساب الارتباطات")
+            
+    def show_missing_values(self, data: pd.DataFrame):
+        """تحليل القيم المفقودة"""
+        st.subheader("❓ تحليل القيم المفقودة")
+        
+        # حساب القيم المفقودة
+        missing = pd.DataFrame({
+            'العدد': data.isnull().sum(),
+            'النسبة (%)': (data.isnull().sum() / len(data) * 100).round(2)
+        })
+        missing = missing[missing['العدد'] > 0].sort_values('النسبة (%)', ascending=False)
+        
+        if not missing.empty:
+            st.dataframe(missing)
+            
+            # رسم بياني للقيم المفقودة
+            fig = px.bar(
+                missing,
+                y=missing.index,
+                x='النسبة (%)',
+                title="نسب القيم المفقودة",
+                orientation='h'
+            )
+            st.plotly_chart(fig)
+            
+            # نمط القيم المفقودة
+            st.subheader("🔍 نمط القيم المفقودة")
+            msno_matrix = data.isnull().astype(int)
+            fig = px.imshow(
+                msno_matrix.sample(min(100, len(msno_matrix))),
+                title="نمط القيم المفقودة (عينة)",
+                labels=dict(color="مفقود")
+            )
+            st.plotly_chart(fig)
+        else:
+            st.success("لا توجد قيم مفقودة في البيانات!")
+            
+    def show_plots(self, data: pd.DataFrame):
+        """عرض رسوم بيانية متنوعة"""
+        st.subheader("📊 الرسوم البيانية")
+        
+        plot_type = st.selectbox(
+            "نوع الرسم البياني",
+            ["توزيع المتغيرات", "العلاقات الثنائية", "مخطط التشتت", "مخطط الصندوق"]
+        )
+        
+        if plot_type == "توزيع المتغيرات":
+            col = st.selectbox("اختر المتغير", data.columns)
+            if col:
+                if np.issubdtype(data[col].dtype, np.number):
+                    fig = px.histogram(
+                        data,
+                        x=col,
+                        title=f"توزيع {col}"
+                    )
+                else:
+                    fig = px.bar(
+                        data[col].value_counts(),
+                        title=f"توزيع {col}"
+                    )
+                st.plotly_chart(fig)
+                
+        elif plot_type == "العلاقات الثنائية":
+            numeric_cols = data.select_dtypes(include=[np.number]).columns
+            if len(numeric_cols) >= 2:
+                col1 = st.selectbox("المتغير الأول", numeric_cols)
+                col2 = st.selectbox("المتغير الثاني", numeric_cols)
+                
+                if col1 and col2:
+                    fig = px.scatter(
+                        data,
+                        x=col1,
+                        y=col2,
+                        title=f"العلاقة بين {col1} و {col2}"
+                    )
+                    st.plotly_chart(fig)
+            else:
+                st.warning("يجب وجود متغيرين عدديين على الأقل")
+                
+        elif plot_type == "مخطط التشتت":
+            numeric_cols = data.select_dtypes(include=[np.number]).columns
+            if len(numeric_cols) >= 2:
+                cols = st.multiselect("اختر المتغيرات", numeric_cols)
+                if len(cols) >= 2:
+                    fig = px.scatter_matrix(
+                        data[cols],
+                        title="مصفوفة التشتت"
+                    )
+                    st.plotly_chart(fig)
+            else:
+                st.warning("يجب وجود متغيرين عدديين على الأقل")
+                
+        elif plot_type == "مخطط الصندوق":
+            numeric_cols = data.select_dtypes(include=[np.number]).columns
+            col = st.selectbox("اختر المتغير", numeric_cols)
+            if col:
+                fig = px.box(
+                    data,
+                    y=col,
+                    title=f"مخطط الصندوق - {col}"
+                )
+                st.plotly_chart(fig)
+                
     def _compute_basic_stats(self, data: pd.DataFrame) -> Dict[str, Any]:
-        """Compute basic statistics of the dataset"""
+        """حساب إحصائيات أساسية لمجموعة البيانات"""
         stats = {
             'n_samples': len(data),
             'n_features': len(data.columns),
@@ -82,7 +290,7 @@ class DataAnalyzer:
             'numeric_stats': data.describe().to_dict(),
         }
         
-        # Add categorical statistics
+        # إضافة إحصائيات المتغيرات الفئوية
         cat_columns = data.select_dtypes(include=['object', 'category']).columns
         if len(cat_columns) > 0:
             stats['categorical_stats'] = {
@@ -96,7 +304,7 @@ class DataAnalyzer:
         return stats
         
     def _detect_feature_types(self, data: pd.DataFrame):
-        """Detect types of features in the dataset"""
+        """اكتشاف أنواع المتغيرات في مجموعة البيانات"""
         for column in data.columns:
             if column == self.target_name:
                 continue
@@ -109,7 +317,7 @@ class DataAnalyzer:
                 self.categorical_features.append(column)
                 
     def _analyze_missing_values(self, data: pd.DataFrame) -> Dict[str, Any]:
-        """Analyze missing values in the dataset"""
+        """تحليل القيم المفقودة في مجموعة البيانات"""
         missing = data.isnull().sum()
         missing_pct = (missing / len(data)) * 100
         
@@ -119,173 +327,8 @@ class DataAnalyzer:
             'missing_percentage': missing_pct[missing_pct > 0].to_dict()
         }
         
-    def _detect_outliers(self, data: pd.DataFrame) -> Dict[str, Any]:
-        """Detect outliers in numerical features"""
-        outliers = {}
-        
-        for feature in self.numerical_features:
-            if feature == self.target_name:
-                continue
-                
-            Q1 = data[feature].quantile(0.25)
-            Q3 = data[feature].quantile(0.75)
-            IQR = Q3 - Q1
-            lower_bound = Q1 - 1.5 * IQR
-            upper_bound = Q3 + 1.5 * IQR
-            
-            outliers[feature] = {
-                'count': len(data[(data[feature] < lower_bound) | (data[feature] > upper_bound)]),
-                'percentage': len(data[(data[feature] < lower_bound) | (data[feature] > upper_bound)]) / len(data) * 100,
-                'bounds': {'lower': lower_bound, 'upper': upper_bound}
-            }
-            
-        return outliers
-        
-    def _analyze_correlations(self, data: pd.DataFrame) -> Dict[str, Any]:
-        """Analyze correlations between features"""
-        correlations = {}
-        
-        # Numerical correlations
-        if len(self.numerical_features) > 1:
-            num_corr = data[self.numerical_features].corr()
-            # Get highly correlated pairs
-            high_corr = np.where(np.abs(num_corr) > 0.8)
-            high_corr = [(num_corr.index[x], num_corr.columns[y], num_corr.iloc[x, y])
-                        for x, y in zip(*high_corr) if x != y and x < y]
-            correlations['numerical'] = high_corr
-            
-        # Categorical correlations (Cramer's V)
-        if len(self.categorical_features) > 1:
-            cat_corr = []
-            for i, feat1 in enumerate(self.categorical_features):
-                for feat2 in self.categorical_features[i+1:]:
-                    cramers_v = self._cramers_v(data[feat1], data[feat2])
-                    if cramers_v > 0.5:  # Only store strong correlations
-                        cat_corr.append((feat1, feat2, cramers_v))
-            correlations['categorical'] = cat_corr
-            
-        return correlations
-        
-    def _cramers_v(self, x: pd.Series, y: pd.Series) -> float:
-        """Calculate Cramer's V statistic between two categorical variables"""
-        confusion_matrix = pd.crosstab(x, y)
-        chi2 = pd.chi2_contingency(confusion_matrix)[0]
-        n = confusion_matrix.sum().sum()
-        phi2 = chi2 / n
-        r, k = confusion_matrix.shape
-        phi2corr = max(0, phi2 - ((k-1)*(r-1))/(n-1))
-        rcorr = r - ((r-1)**2)/(n-1)
-        kcorr = k - ((k-1)**2)/(n-1)
-        return np.sqrt(phi2corr / min((kcorr-1), (rcorr-1)))
-        
-    def _analyze_class_balance(self, target: pd.Series) -> Dict[str, Any]:
-        """Analyze class balance for classification tasks"""
-        value_counts = target.value_counts()
-        class_distribution = (value_counts / len(target) * 100).to_dict()
-        
-        imbalance_ratio = value_counts.max() / value_counts.min()
-        is_imbalanced = imbalance_ratio > 3  # Arbitrary threshold
-        
-        return {
-            'class_distribution': class_distribution,
-            'imbalance_ratio': imbalance_ratio,
-            'is_imbalanced': is_imbalanced,
-            'recommended_sampling': 'SMOTE' if is_imbalanced else None
-        }
-        
-    def _analyze_feature_importance(
-        self,
-        X: pd.DataFrame,
-        y: pd.Series,
-        task_type: str
-    ) -> Dict[str, float]:
-        """Analyze feature importance using various methods"""
-        try:
-            # Use SHAP for initial feature importance
-            if task_type == 'classification':
-                from sklearn.ensemble import RandomForestClassifier as RF
-            else:
-                from sklearn.ensemble import RandomForestRegressor as RF
-            
-            model = RF(n_estimators=100, random_state=42)
-            model.fit(X, y)
-            
-            # SHAP values
-            explainer = shap.TreeExplainer(model)
-            shap_values = explainer.shap_values(X)
-            if isinstance(shap_values, list):
-                shap_values = shap_values[0]
-            
-            # Get feature importance
-            importance_dict = {}
-            for i, col in enumerate(X.columns):
-                importance_dict[col] = np.abs(shap_values[:, i]).mean()
-                
-            # Normalize importance values
-            total = sum(importance_dict.values())
-            importance_dict = {k: v/total for k, v in importance_dict.items()}
-            
-            self.feature_importance = importance_dict
-            return importance_dict
-            
-        except Exception as e:
-            logging.error(f"Error in feature importance analysis: {str(e)}")
-            return {}
-            
-    def _generate_quality_report(self, data: pd.DataFrame) -> Dict[str, Any]:
-        """Generate comprehensive data quality report"""
-        report = Report(metrics=[
-            DataQualityPreset(),
-            DataDriftPreset()
-        ])
-        
-        try:
-            report.run(reference_data=data, current_data=data)
-            return report.json()
-        except Exception as e:
-            logging.error(f"Error generating quality report: {str(e)}")
-            return {}
-            
-    def get_recommended_preprocessing(self) -> Dict[str, Any]:
-        """Get recommended preprocessing steps based on analysis"""
-        recommendations = {
-            'scaling': None,
-            'encoding': None,
-            'imputation': None,
-            'feature_selection': None,
-            'sampling': None
-        }
-        
-        # Scaling recommendation
-        if self.numerical_features:
-            if any(self.feature_importance.get(f, 0) > 0.1 for f in self.numerical_features):
-                recommendations['scaling'] = 'StandardScaler'
-            else:
-                recommendations['scaling'] = 'RobustScaler'
-                
-        # Encoding recommendation
-        if self.categorical_features:
-            if len(self.categorical_features) > 10:
-                recommendations['encoding'] = 'TargetEncoder'
-            else:
-                recommendations['encoding'] = 'OneHotEncoder'
-                
-        # Imputation recommendation
-        missing_analysis = self._analyze_missing_values(pd.DataFrame())
-        if missing_analysis['total_missing'] > 0:
-            if missing_analysis['total_missing'] / len(self.numerical_features) < 0.1:
-                recommendations['imputation'] = 'SimpleImputer'
-            else:
-                recommendations['imputation'] = 'KNNImputer'
-                
-        # Feature selection recommendation
-        if len(self.feature_importance) > 20:
-            recommendations['feature_selection'] = 'SelectFromModel'
-            
-        return recommendations
-        
     def setup_drift_detection(self, reference_data: pd.DataFrame):
-        """Setup drift detection for monitoring"""
+        """إعداد كشف الانجراف للبيانات"""
         try:
             self.drift_detector = TabularDrift(
                 reference_data.values,
@@ -295,12 +338,12 @@ class DataAnalyzer:
                 }
             )
         except Exception as e:
-            logging.error(f"Error setting up drift detection: {str(e)}")
+            logging.error(f"خطأ في إعداد كشف الانجراف: {str(e)}")
             
     def check_drift(self, new_data: pd.DataFrame) -> Dict[str, Any]:
-        """Check for data drift in new data"""
+        """التحقق من الانجراف في البيانات الجديدة"""
         if self.drift_detector is None:
-            raise ValueError("Drift detector not initialized. Call setup_drift_detection first.")
+            raise ValueError("كشف الانجراف غير مفعل. قم بإعداد كشف الانجراف أولا.")
             
         try:
             drift_prediction = self.drift_detector.predict(new_data.values)
@@ -311,7 +354,7 @@ class DataAnalyzer:
                 'feature_scores': drift_prediction['data'].get('feature_score', {})
             }
         except Exception as e:
-            logging.error(f"Error checking drift: {str(e)}")
+            logging.error(f"خطأ في التحقق من الانجراف: {str(e)}")
             return {
                 'drift_detected': None,
                 'error': str(e)

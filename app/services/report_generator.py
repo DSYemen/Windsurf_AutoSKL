@@ -10,6 +10,7 @@ from sklearn.metrics import (
 )
 import json
 from pathlib import Path
+from typing import Optional
 
 class ReportGenerator:
     def __init__(self, output_dir: str = "reports"):
@@ -168,6 +169,179 @@ class ReportGenerator:
         report_path.write_text("\n".join(html_content))
         return str(report_path)
         
+    def plot_feature_importance(self, feature_importance: Dict[str, float]) -> go.Figure:
+        """Plot feature importance using plotly
+        
+        Args:
+            feature_importance: Dictionary mapping feature names to their importance scores
+            
+        Returns:
+            plotly.graph_objects.Figure: Feature importance bar plot
+        """
+        if not feature_importance:
+            # Return empty figure if no feature importance data
+            fig = go.Figure()
+            fig.add_annotation(
+                text="لا توجد بيانات لأهمية المتغيرات",
+                xref="paper",
+                yref="paper",
+                x=0.5,
+                y=0.5,
+                showarrow=False
+            )
+            return fig
+            
+        # Convert to dataframe and sort by importance
+        df = pd.DataFrame([
+            {"المتغير": feature, "الأهمية": importance}
+            for feature, importance in feature_importance.items()
+        ]).sort_values("الأهمية", ascending=True)
+        
+        # Create horizontal bar plot
+        fig = go.Figure()
+        fig.add_trace(go.Bar(
+            x=df["الأهمية"],
+            y=df["المتغير"],
+            orientation='h'
+        ))
+        
+        # Update layout
+        fig.update_layout(
+            title={
+                'text': "أهمية المتغيرات",
+                'x': 0.5,
+                'xanchor': 'center'
+            },
+            xaxis_title="درجة الأهمية",
+            yaxis_title="المتغير",
+            height=max(400, len(feature_importance) * 25),  # Dynamic height based on number of features
+            showlegend=False,
+            font=dict(size=12),
+            margin=dict(l=10, r=10, t=40, b=10)
+        )
+        
+        # Add percentage labels
+        total_importance = df["الأهمية"].sum()
+        percentages = (df["الأهمية"] / total_importance * 100).round(1)
+        
+        for i, (imp, pct) in enumerate(zip(df["الأهمية"], percentages)):
+            fig.add_annotation(
+                x=imp,
+                y=i,
+                text=f"{pct}%",
+                xanchor='left',
+                showarrow=False,
+                font=dict(size=10),
+                xshift=5
+            )
+        
+        return fig
+        
+    def plot_confusion_matrix(self, y_true: np.ndarray, y_pred: np.ndarray, 
+                            labels: Optional[List[str]] = None) -> go.Figure:
+        """Plot confusion matrix
+        
+        Args:
+            y_true: True labels
+            y_pred: Predicted labels
+            labels: Optional list of class labels
+            
+        Returns:
+            plotly.graph_objects.Figure: Confusion matrix heatmap
+        """
+        # Calculate confusion matrix
+        cm = confusion_matrix(y_true, y_pred)
+        
+        if labels is None:
+            labels = [str(i) for i in range(len(cm))]
+            
+        # Create heatmap
+        fig = go.Figure(data=go.Heatmap(
+            z=cm,
+            x=labels,
+            y=labels,
+            colorscale='RdBu',
+            text=cm,
+            texttemplate="%{text}",
+            textfont={"size": 12},
+            hoverongaps=False
+        ))
+        
+        # Update layout
+        fig.update_layout(
+            title={
+                'text': "مصفوفة الالتباس",
+                'x': 0.5,
+                'xanchor': 'center'
+            },
+            xaxis_title="التنبؤات",
+            yaxis_title="القيم الحقيقية",
+            width=500,
+            height=500,
+            font=dict(size=12)
+        )
+        
+        return fig
+        
+    def plot_roc_curve(self, y_true: np.ndarray, y_score: np.ndarray, 
+                      pos_label: Optional[int] = None) -> go.Figure:
+        """Plot ROC curve
+        
+        Args:
+            y_true: True labels
+            y_score: Predicted probabilities
+            pos_label: Label of positive class
+            
+        Returns:
+            plotly.graph_objects.Figure: ROC curve plot
+        """
+        from sklearn.metrics import roc_curve, auc
+        
+        # Calculate ROC curve
+        fpr, tpr, _ = roc_curve(y_true, y_score, pos_label=pos_label)
+        roc_auc = auc(fpr, tpr)
+        
+        # Create plot
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(
+            x=fpr, 
+            y=tpr,
+            mode='lines',
+            name=f'ROC (AUC = {roc_auc:.3f})'
+        ))
+        
+        # Add diagonal line
+        fig.add_trace(go.Scatter(
+            x=[0, 1],
+            y=[0, 1],
+            mode='lines',
+            line=dict(dash='dash', color='gray'),
+            name='Random'
+        ))
+        
+        # Update layout
+        fig.update_layout(
+            title={
+                'text': "منحنى ROC",
+                'x': 0.5,
+                'xanchor': 'center'
+            },
+            xaxis_title="معدل الإيجابيات الخاطئة",
+            yaxis_title="معدل الإيجابيات الصحيحة",
+            width=600,
+            height=500,
+            font=dict(size=12),
+            showlegend=True,
+            legend=dict(
+                yanchor="bottom",
+                y=0.01,
+                xanchor="right",
+                x=0.99
+            )
+        )
+        
+        return fig
+
     def save_json_report(self, data: Dict[str, Any], report_name: str):
         """Save report data as JSON"""
         report_path = self.output_dir / f"{report_name}.json"

@@ -8,6 +8,8 @@ from dataclasses import dataclass
 import json
 from pathlib import Path
 import time
+import base64
+from app.ui.components.report_generator import ReportGenerator
 
 @dataclass
 class ModelComparison:
@@ -27,7 +29,48 @@ class ModelComparer:
             'primary': '#4CAF50',
             'secondary': '#45a049'
         }
+        self.report_generator = ReportGenerator()
         
+    @st.cache_data(ttl=1800)
+    def _calculate_model_metrics(self, models: List[ModelComparison]) -> pd.DataFrame:
+        """حساب مقاييس النماذج مع التخزين المؤقت"""
+        try:
+            performance_data = []
+            for model in models:
+                for metric, value in model.metrics.items():
+                    performance_data.append({
+                        'Model': model.model_name,
+                        'Metric': metric,
+                        'Value': value
+                    })
+            return pd.DataFrame(performance_data)
+        except Exception as e:
+            st.error(f"حدث خطأ أثناء حساب مقاييس النماذج: {str(e)}")
+            return pd.DataFrame()
+
+    @st.cache_data(ttl=1800)
+    def _calculate_resource_metrics(self, models: List[ModelComparison]) -> pd.DataFrame:
+        """حساب مقاييس موارد النماذج مع التخزين المؤقت"""
+        try:
+            resource_data = []
+            for model in models:
+                resource_data.extend([
+                    {
+                        'Model': model.model_name,
+                        'Metric': 'Training Time (s)',
+                        'Value': model.training_time
+                    },
+                    {
+                        'Model': model.model_name,
+                        'Metric': 'Memory Usage (MB)',
+                        'Value': model.memory_usage
+                    }
+                ])
+            return pd.DataFrame(resource_data)
+        except Exception as e:
+            st.error(f"حدث خطأ أثناء حساب مقاييس الموارد: {str(e)}")
+            return pd.DataFrame()
+
     def compare_models(
         self,
         models: List[ModelComparison],
@@ -39,11 +82,8 @@ class ModelComparer:
         # Performance comparison
         self._compare_performance(models, metric_name)
         
-        # Training time comparison
-        self._compare_training_time(models)
-        
-        # Memory usage comparison
-        self._compare_memory_usage(models)
+        # Training time and memory comparison
+        self._compare_resources(models)
         
         # Feature importance comparison
         self._compare_feature_importance(models)
@@ -60,124 +100,68 @@ class ModelComparer:
         metric_name: str
     ):
         """Compare model performance"""
-        st.markdown("### 📈 Performance Comparison")
+        st.markdown("### 📈 مقارنة الأداء")
         
-        # Create performance dataframe
-        performance_data = []
-        for model in models:
-            for metric, value in model.metrics.items():
-                performance_data.append({
-                    'Model': model.model_name,
-                    'Metric': metric,
-                    'Value': value
-                })
+        df = self._calculate_model_metrics(models)
+        if df.empty:
+            st.warning("لا يمكن مقارنة أداء النماذج في الوقت الحالي")
+            return
+        
+        try:
+            # عرض المقياس الرئيسي
+            main_metric_df = df[df['Metric'] == metric_name]
+            if not main_metric_df.empty:
+                self.report_generator.plot_metric_comparison(
+                    main_metric_df,
+                    x='Model',
+                    y='Value',
+                    title=f"مقارنة {metric_name}"
+                )
+            
+            # عرض المقاييس الأخرى
+            other_metrics = [m for m in df['Metric'].unique() if m != metric_name]
+            if other_metrics:
+                selected_metric = st.selectbox(
+                    "اختر مقياساً آخر للمقارنة",
+                    options=other_metrics
+                )
                 
-        df = pd.DataFrame(performance_data)
-        
-        # Create interactive bar plot
-        fig = px.bar(
-            df[df['Metric'] == metric_name],
-            x='Model',
-            y='Value',
-            title=f"{metric_name.title()} Comparison",
-            color='Model'
-        )
-        
-        fig.update_layout(
-            plot_bgcolor='white',
-            hoverlabel=dict(bgcolor="white"),
-            margin=dict(l=20, r=20, t=40, b=20)
-        )
-        
-        st.plotly_chart(fig, use_container_width=True)
-        
-        # Show other metrics
-        if len(df['Metric'].unique()) > 1:
-            selected_metric = st.selectbox(
-                "Select another metric to compare",
-                [m for m in df['Metric'].unique() if m != metric_name]
-            )
-            
-            fig = px.bar(
-                df[df['Metric'] == selected_metric],
-                x='Model',
-                y='Value',
-                title=f"{selected_metric.title()} Comparison",
-                color='Model'
-            )
-            
-            fig.update_layout(
-                plot_bgcolor='white',
-                hoverlabel=dict(bgcolor="white"),
-                margin=dict(l=20, r=20, t=40, b=20)
-            )
-            
-            st.plotly_chart(fig, use_container_width=True)
-            
-    def _compare_training_time(
+                other_metric_df = df[df['Metric'] == selected_metric]
+                self.report_generator.plot_metric_comparison(
+                    other_metric_df,
+                    x='Model',
+                    y='Value',
+                    title=f"مقارنة {selected_metric}"
+                )
+        except Exception as e:
+            st.error(f"حدث خطأ أثناء عرض مقارنة الأداء: {str(e)}")
+            st.info("نصيحة: تأكد من توفر جميع المقاييس المطلوبة للنماذج")
+
+    def _compare_resources(
         self,
         models: List[ModelComparison]
     ):
-        """Compare model training times"""
-        st.markdown("### ⏱️ Training Time Comparison")
+        """Compare model resource usage (time and memory)"""
+        st.markdown("### ⚡ مقارنة استخدام الموارد")
         
-        # Create training time dataframe
-        df = pd.DataFrame([
-            {
-                'Model': model.model_name,
-                'Training Time (s)': model.training_time
-            }
-            for model in models
-        ])
+        df = self._calculate_resource_metrics(models)
+        if df.empty:
+            st.warning("لا يمكن مقارنة استخدام الموارد في الوقت الحالي")
+            return
         
-        fig = px.bar(
-            df,
-            x='Model',
-            y='Training Time (s)',
-            title="Training Time Comparison",
-            color='Model'
-        )
-        
-        fig.update_layout(
-            plot_bgcolor='white',
-            hoverlabel=dict(bgcolor="white"),
-            margin=dict(l=20, r=20, t=40, b=20)
-        )
-        
-        st.plotly_chart(fig, use_container_width=True)
-        
-    def _compare_memory_usage(
-        self,
-        models: List[ModelComparison]
-    ):
-        """Compare model memory usage"""
-        st.markdown("### 💾 Memory Usage Comparison")
-        
-        # Create memory usage dataframe
-        df = pd.DataFrame([
-            {
-                'Model': model.model_name,
-                'Memory Usage (MB)': model.memory_usage
-            }
-            for model in models
-        ])
-        
-        fig = px.bar(
-            df,
-            x='Model',
-            y='Memory Usage (MB)',
-            title="Memory Usage Comparison",
-            color='Model'
-        )
-        
-        fig.update_layout(
-            plot_bgcolor='white',
-            hoverlabel=dict(bgcolor="white"),
-            margin=dict(l=20, r=20, t=40, b=20)
-        )
-        
-        st.plotly_chart(fig, use_container_width=True)
-        
+        try:
+            for metric in ['Training Time (s)', 'Memory Usage (MB)']:
+                metric_df = df[df['Metric'] == metric]
+                if not metric_df.empty:
+                    self.report_generator.plot_metric_comparison(
+                        metric_df,
+                        x='Model',
+                        y='Value',
+                        title=f"مقارنة {metric}"
+                    )
+        except Exception as e:
+            st.error(f"حدث خطأ أثناء عرض مقارنة الموارد: {str(e)}")
+
     def _compare_feature_importance(
         self,
         models: List[ModelComparison]

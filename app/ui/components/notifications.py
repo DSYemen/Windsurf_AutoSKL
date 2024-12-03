@@ -126,6 +126,34 @@ class NotificationSystem:
             ):
                 self.dismiss(notification['id'])
                 
+    def show_success(self, message: str, persist: bool = False):
+        """Show a success notification"""
+        self.notify(message, type='success', persist=persist)
+        
+    def show_info(self, message: str, persist: bool = False):
+        """Show an info notification"""
+        self.notify(message, type='info', persist=persist)
+        
+    def show_warning(self, message: str, persist: bool = False):
+        """Show a warning notification"""
+        self.notify(message, type='warning', persist=persist)
+        
+    def show_error(self, message: str, persist: bool = True):
+        """Show an error notification"""
+        self.notify(message, type='error', persist=persist)
+        
+    def show_model_update(self, message: str, persist: bool = False):
+        """Show a model update notification"""
+        self.notify(message, type='model', persist=persist)
+        
+    def show_data_update(self, message: str, persist: bool = False):
+        """Show a data update notification"""
+        self.notify(message, type='data', persist=persist)
+        
+    def show_system_update(self, message: str, persist: bool = False):
+        """Show a system update notification"""
+        self.notify(message, type='system', persist=persist)
+        
     def save_history(self, file_path: str):
         """Save notification history to file"""
         history = {

@@ -1,0 +1,11 @@
+id,age,income,education,job_category,has_car,credit_score
+1,35,55000,Bachelor,IT,yes,720
+2,28,42000,Master,Finance,yes,680
+3,45,75000,PhD,Management,yes,800
+4,31,48000,Bachelor,Sales,no,650
+5,39,62000,Master,IT,yes,750
+6,42,58000,Bachelor,Management,yes,690
+7,29,44000,Master,Finance,no,670
+8,36,52000,Bachelor,Sales,yes,700
+9,33,49000,Master,IT,yes,730
+10,41,67000,PhD,Management,yes,780

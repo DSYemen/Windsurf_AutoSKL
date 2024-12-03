@@ -242,3 +242,10 @@ class InteractiveHelp:
         """Show interactive guide for troubleshooting"""
         # Similar to _show_data_analysis_guide
         pass
+
+    def show_help_button(self, section: str) -> bool:
+        """Show a help button for a specific section and return if it was clicked"""
+        help_key = f"help_button_{section}"
+        col1, col2 = st.columns([0.9, 0.1])
+        with col2:
+            return st.button("❓", key=help_key, help=f"Get help about {section}")

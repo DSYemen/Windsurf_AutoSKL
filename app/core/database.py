@@ -2,7 +2,7 @@ from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, 
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime
-from typing import Dict, Any, Optional, Union
+from typing import Dict, Any, Optional, Union, List
 import json
 import joblib
 import io
@@ -106,6 +106,22 @@ class DatabaseManager:
         finally:
             db.close()
     
+    def get_all_model_ids(self) -> List[int]:
+        """Get all model IDs from database"""
+        db = self.SessionLocal()
+        try:
+            return [model.id for model in db.query(MLModel).all()]
+        finally:
+            db.close()
+            
+    def get_all_model_names(self) -> List[str]:
+        """Get all unique model names from database"""
+        db = self.SessionLocal()
+        try:
+            return [model.name for model in db.query(MLModel.name).distinct()]
+        finally:
+            db.close()
+            
     def get_model_id_by_name(self, model_name: str) -> Optional[int]:
         """Get model ID by name (returns latest version)"""
         db = self.SessionLocal()
@@ -165,26 +181,8 @@ class DatabaseManager:
         finally:
             db.close()
     
-    def get_all_model_ids(self) -> list:
-        """الحصول على قائمة معرفات جميع النماذج"""
-        db = self.SessionLocal()
-        try:
-            models = db.query(MLModel.id).all()
-            return [model[0] for model in models]
-        finally:
-            db.close()
-            
-    def get_all_model_names(self) -> list:
-        """الحصول على قائمة أسماء جميع النماذج"""
-        db = self.SessionLocal()
-        try:
-            models = db.query(MLModel.name).distinct().all()
-            return [model[0] for model in models]
-        finally:
-            db.close()
-            
-    def get_model_history(self, model_name: str) -> list:
-        """الحصول على تاريخ تدريب النموذج"""
+    def get_model_history(self, model_name: str) -> List[Dict[str, Any]]:
+        """Get model history"""
         db = self.SessionLocal()
         try:
             models = db.query(MLModel).filter(
@@ -201,21 +199,22 @@ class DatabaseManager:
         finally:
             db.close()
 
-    def get_all_models(self) -> list:
-        """الحصول على جميع النماذج المحفوظة"""
+    def get_all_models(self) -> List[Dict[str, Any]]:
+        """Get all models with their metadata"""
         db = self.SessionLocal()
         try:
             models = db.query(MLModel).order_by(MLModel.created_at.desc()).all()
             return [{
                 'id': model.id,
                 'name': model.name,
-                'version': model.version,
-                'model_type': model.model_type,
-                'created_at': model.created_at,
-                'metrics': model.metrics,
-                'hyperparameters': model.hyperparameters,
-                'feature_importance': model.feature_importance,
-                'preprocessing_params': model.preprocessing_params
+                'type': model.model_type,
+                'score': model.metrics.get('test_score', 0.0) if model.metrics else 0.0,
+                'created_at': model.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+                'target': model.preprocessing_params.get('target_column') if model.preprocessing_params else None,
+                'features': model.preprocessing_params.get('feature_columns', []) if model.preprocessing_params else [],
+                'metrics': model.metrics or {},
+                'feature_importance': model.feature_importance or {},
+                'preprocessing_params': model.preprocessing_params or {}
             } for model in models]
         finally:
             db.close()

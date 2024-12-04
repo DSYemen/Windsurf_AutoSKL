@@ -43,5 +43,5 @@ setup(
         "matplotlib>=3.8.2",
         "pillow>=10.1.0"
     ],
-    python_requires=">=3.8",
+    python_requires=">=3.11",
 )

@@ -5,8 +5,13 @@ import plotly.express as px
 import plotly.graph_objects as go
 from typing import Dict, Any, List, Optional, Tuple, Union
 import numpy as np
+import io
+import joblib
+import psutil
+import platform
+import sklearn
 
-from app.core.database import DatabaseManager
+from app.core.database import DatabaseManager, MLModel
 from app.services.model_trainer import AutoMLModelTrainer
 from app.services.data_analyzer import DataAnalyzer
 from app.services.model_monitor import ModelMonitor
@@ -403,38 +408,7 @@ class Dashboard:
     def _load_saved_models(_self) -> List[dict]:
         """تحميل النماذج المحفوظة مع التخزين المؤقت"""
         try:
-            # Get all models
-            models = []
-            db = _self.db_manager.SessionLocal()
-            
-            try:
-                # Query all models with their metadata
-                db_models = db.query(MLModel).all()
-                
-                for db_model in db_models:
-                    # Load model binary and metadata
-                    model_binary = io.BytesIO(db_model.model_binary)
-                    model = joblib.load(model_binary)
-                    
-                    # Create model info dictionary
-                    model_info = {
-                        'id': db_model.id,
-                        'name': db_model.name,
-                        'type': db_model.model_type,
-                        'score': db_model.metrics.get('test_score', 0.0) if db_model.metrics else 0.0,
-                        'created_at': db_model.created_at.strftime('%Y-%m-%d %H:%M:%S'),
-                        'target': db_model.preprocessing_params.get('target_column') if db_model.preprocessing_params else None,
-                        'features': db_model.preprocessing_params.get('feature_columns', []) if db_model.preprocessing_params else [],
-                        'metrics': db_model.metrics or {},
-                        'feature_importance': db_model.feature_importance or {},
-                        'preprocessing_params': db_model.preprocessing_params or {}
-                    }
-                    models.append(model_info)
-                    
-            finally:
-                db.close()
-                    
-            return models
+            return _self.db_manager.get_all_models()
         except Exception as e:
             st.error(f"خطأ في تحميل النماذج: {str(e)}")
             return []
@@ -455,9 +429,9 @@ class Dashboard:
             model_table = pd.DataFrame([
                 {
                     'اسم النموذج': model['name'],
-                    'نوع المهمة': model['type'],
-                    'النتيجة': f"{model['score']:.4f}",
-                    'تاريخ الإنشاء': model['created_at']
+                    'نوع المهمة': model.get('type', 'غير محدد'),
+                    'النتيجة': f"{model.get('score', 0.0):.4f}",
+                    'تاريخ الإنشاء': model.get('created_at', '')
                 }
                 for model in saved_models
             ])
@@ -480,14 +454,14 @@ class Dashboard:
                     col1, col2 = st.columns(2)
                     with col1:
                         st.write("**معلومات أساسية:**")
-                        st.write(f"- النوع: {selected_model['type']}")
-                        st.write(f"- النتيجة: {selected_model['score']:.4f}")
-                        st.write(f"- تاريخ الإنشاء: {selected_model['created_at']}")
+                        st.write(f"- النوع: {selected_model.get('type', 'غير محدد')}")
+                        st.write(f"- النتيجة: {selected_model.get('score', 0.0):.4f}")
+                        st.write(f"- تاريخ الإنشاء: {selected_model.get('created_at', '')}")
                     
                     with col2:
                         st.write("**المتغيرات:**")
-                        st.write(f"- المتغير الهدف: {selected_model['target']}")
-                        st.write(f"- عدد المتغيرات: {len(selected_model['features'])}")
+                        st.write(f"- المتغير الهدف: {selected_model.get('target', 'غير محدد')}")
+                        st.write(f"- عدد المتغيرات: {len(selected_model.get('features', []))}")
                 
                 # عرض المقاييس
                 if 'metrics' in selected_model:

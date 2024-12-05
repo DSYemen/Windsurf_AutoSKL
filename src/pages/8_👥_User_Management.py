@@ -129,13 +129,13 @@ with st.sidebar:
                 # Store token
                 st.session_state.user_token = token
                 st.success(f"Welcome {username}!")
-                st.experimental_rerun()
+                st.rerun()
             else:
                 st.error("Invalid username or password")
     else:
         if st.button("Logout"):
             del st.session_state.user_token
-            st.experimental_rerun()
+            st.rerun()
 
 # Main content
 if "user_token" in st.session_state:
@@ -143,7 +143,7 @@ if "user_token" in st.session_state:
     if not payload:
         del st.session_state.user_token
         st.error("Session expired. Please login again.")
-        st.experimental_rerun()
+        st.rerun()
     
     current_user = payload["sub"]
     current_role = payload["role"]
@@ -204,7 +204,7 @@ if "user_token" in st.session_state:
                     del users[user_to_delete]
                     save_users(users)
                     st.success(f"User {user_to_delete} deleted successfully")
-                    st.experimental_rerun()
+                    st.rerun()
         
         # Change user role
         with st.expander("Change User Role"):
@@ -225,7 +225,7 @@ if "user_token" in st.session_state:
                     users[user_to_change]["role"] = new_role
                     save_users(users)
                     st.success(f"Role updated for {user_to_change}")
-                    st.experimental_rerun()
+                    st.rerun()
     
     else:
         st.warning("You don't have permission to manage users")

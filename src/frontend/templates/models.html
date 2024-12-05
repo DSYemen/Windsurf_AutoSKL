@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Models - Windsurf AutoSKL</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body class="bg-gray-100">
+    <!-- Navigation (same as dashboard) -->
+    {% include 'components/navigation.html' %}
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+        <!-- Header -->
+        <div class="md:flex md:items-center md:justify-between mb-6">
+            <div class="flex-1 min-w-0">
+                <h2 class="text-2xl font-bold leading-7 text-gray-900 sm:text-3xl sm:truncate">
+                    Models
+                </h2>
+            </div>
+            <div class="mt-4 flex md:mt-0 md:ml-4">
+                <button onclick="showCreateModelModal()" class="ml-3 inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                    Create New Model
+                </button>
+            </div>
+        </div>
+
+        <!-- Model Filters -->
+        <div class="bg-white shadow rounded-lg mb-6">
+            <div class="px-4 py-5 sm:p-6">
+                <div class="grid grid-cols-1 gap-4 sm:grid-cols-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Type</label>
+                        <select id="modelType" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
+                            <option value="">All Types</option>
+                            <option value="classification">Classification</option>
+                            <option value="regression">Regression</option>
+                            <option value="clustering">Clustering</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Status</label>
+                        <select id="modelStatus" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
+                            <option value="">All Status</option>
+                            <option value="production">Production</option>
+                            <option value="staging">Staging</option>
+                            <option value="development">Development</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Sort By</label>
+                        <select id="sortBy" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
+                            <option value="created_at">Created Date</option>
+                            <option value="performance">Performance</option>
+                            <option value="predictions">Predictions</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Search</label>
+                        <input type="text" id="searchModels" placeholder="Search models..." class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Models Grid -->
+        <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {% for model in models %}
+            <div class="bg-white overflow-hidden shadow rounded-lg">
+                <div class="p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-medium text-gray-900">{{ model.name }}</h3>
+                        <span class="px-2 py-1 text-xs font-medium rounded-full {{ model.status_color }}">
+                            {{ model.status }}
+                        </span>
+                    </div>
+                    <div class="mb-4">
+                        <p class="text-sm text-gray-500">{{ model.description }}</p>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4 mb-4">
+                        <div>
+                            <p class="text-sm font-medium text-gray-500">Type</p>
+                            <p class="mt-1 text-sm text-gray-900">{{ model.type }}</p>
+                        </div>
+                        <div>
+                            <p class="text-sm font-medium text-gray-500">Version</p>
+                            <p class="mt-1 text-sm text-gray-900">{{ model.version }}</p>
+                        </div>
+                        <div>
+                            <p class="text-sm font-medium text-gray-500">Performance</p>
+                            <p class="mt-1 text-sm text-gray-900">{{ model.performance }}%</p>
+                        </div>
+                        <div>
+                            <p class="text-sm font-medium text-gray-500">Predictions</p>
+                            <p class="mt-1 text-sm text-gray-900">{{ model.predictions_count }}</p>
+                        </div>
+                    </div>
+                    <div class="flex space-x-3">
+                        <button onclick="viewModel({{ model.id }})" class="flex-1 bg-white text-sm text-indigo-600 hover:text-indigo-900 font-medium">
+                            View Details
+                        </button>
+                        <button onclick="deployModel({{ model.id }})" class="flex-1 bg-white text-sm text-green-600 hover:text-green-900 font-medium">
+                            Deploy
+                        </button>
+                        <button onclick="deleteModel({{ model.id }})" class="flex-1 bg-white text-sm text-red-600 hover:text-red-900 font-medium">
+                            Delete
+                        </button>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </main>
+
+    <!-- Create Model Modal -->
+    <div id="createModelModal" class="fixed inset-0 bg-gray-500 bg-opacity-75 hidden">
+        <div class="flex items-center justify-center min-h-screen">
+            <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full">
+                <div class="px-6 py-4 border-b border-gray-200">
+                    <h3 class="text-lg font-medium text-gray-900">Create New Model</h3>
+                </div>
+                <form id="createModelForm" class="px-6 py-4">
+                    <div class="grid grid-cols-1 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Name</label>
+                            <input type="text" name="name" required class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Type</label>
+                            <select name="type" required class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
+                                <option value="classification">Classification</option>
+                                <option value="regression">Regression</option>
+                                <option value="clustering">Clustering</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Description</label>
+                            <textarea name="description" rows="3" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"></textarea>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Training Data</label>
+                            <input type="file" name="training_data" accept=".csv,.parquet" required class="mt-1 block w-full">
+                        </div>
+                    </div>
+                    <div class="mt-6 flex justify-end space-x-3">
+                        <button type="button" onclick="hideCreateModelModal()" class="px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-500">
+                            Cancel
+                        </button>
+                        <button type="submit" class="px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-md">
+                            Create Model
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript -->
+    <script>
+        // Show/Hide Create Model Modal
+        function showCreateModelModal() {
+            document.getElementById('createModelModal').classList.remove('hidden');
+        }
+
+        function hideCreateModelModal() {
+            document.getElementById('createModelModal').classList.add('hidden');
+        }
+
+        // Form Submission
+        document.getElementById('createModelForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            
+            try {
+                const response = await fetch('/api/models', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (response.ok) {
+                    hideCreateModelModal();
+                    window.location.reload();
+                } else {
+                    alert('Error creating model');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error creating model');
+            }
+        });
+
+        // Model Actions
+        async function viewModel(modelId) {
+            window.location.href = `/models/${modelId}`;
+        }
+
+        async function deployModel(modelId) {
+            if (confirm('Are you sure you want to deploy this model?')) {
+                try {
+                    const response = await fetch(`/api/models/${modelId}/deploy`, {
+                        method: 'POST'
+                    });
+                    
+                    if (response.ok) {
+                        window.location.reload();
+                    } else {
+                        alert('Error deploying model');
+                    }
+                } catch (error) {
+                    console.error('Error:', error);
+                    alert('Error deploying model');
+                }
+            }
+        }
+
+        async function deleteModel(modelId) {
+            if (confirm('Are you sure you want to delete this model?')) {
+                try {
+                    const response = await fetch(`/api/models/${modelId}`, {
+                        method: 'DELETE'
+                    });
+                    
+                    if (response.ok) {
+                        window.location.reload();
+                    } else {
+                        alert('Error deleting model');
+                    }
+                } catch (error) {
+                    console.error('Error:', error);
+                    alert('Error deleting model');
+                }
+            }
+        }
+
+        // Filters
+        document.getElementById('modelType').addEventListener('change', filterModels);
+        document.getElementById('modelStatus').addEventListener('change', filterModels);
+        document.getElementById('sortBy').addEventListener('change', filterModels);
+        document.getElementById('searchModels').addEventListener('input', filterModels);
+
+        async function filterModels() {
+            const type = document.getElementById('modelType').value;
+            const status = document.getElementById('modelStatus').value;
+            const sortBy = document.getElementById('sortBy').value;
+            const search = document.getElementById('searchModels').value;
+
+            const queryParams = new URLSearchParams({
+                type,
+                status,
+                sort_by: sortBy,
+                search
+            });
+
+            window.location.href = `/models?${queryParams.toString()}`;
+        }
+    </script>
+</body>
+</html>

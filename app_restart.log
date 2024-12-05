@@ -1,0 +1,4 @@
+2024-12-05 08:52:29,342 - INFO - Starting application: streamlit run G:\ProjectsTestAI\Windsurf_AutoSKL\app\ui\dashboard_new.py --server.port 8501 --server.address localhost
+2024-12-05 08:52:37,688 - INFO - Application started successfully
+2024-12-05 08:53:13,935 - INFO - Starting application: streamlit run G:\ProjectsTestAI\Windsurf_AutoSKL\app\ui\dashboard_new.py --server.port 8501 --server.address localhost
+2024-12-05 08:53:15,467 - INFO - Application started successfully

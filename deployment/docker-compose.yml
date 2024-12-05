@@ -1,0 +1,119 @@
+version: '3.8'
+
+services:
+  # API Service
+  api:
+    build:
+      context: ..
+      dockerfile: deployment/Dockerfile
+    image: windsurf-autoskl-api
+    container_name: windsurf-api
+    ports:
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=production
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/windsurf
+      - MODEL_REGISTRY_PATH=/app/model_registry
+      - LOG_LEVEL=INFO
+      - REDIS_URL=redis://redis:6379/0
+    volumes:
+      - model_registry:/app/model_registry
+    depends_on:
+      - db
+      - redis
+    restart: unless-stopped
+    networks:
+      - windsurf-network
+
+  # Worker Service for Batch Processing
+  worker:
+    build:
+      context: ..
+      dockerfile: deployment/Dockerfile.worker
+    image: windsurf-autoskl-worker
+    container_name: windsurf-worker
+    environment:
+      - ENVIRONMENT=production
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/windsurf
+      - MODEL_REGISTRY_PATH=/app/model_registry
+      - LOG_LEVEL=INFO
+      - REDIS_URL=redis://redis:6379/0
+    volumes:
+      - model_registry:/app/model_registry
+    depends_on:
+      - db
+      - redis
+    restart: unless-stopped
+    networks:
+      - windsurf-network
+
+  # Database
+  db:
+    image: postgres:14-alpine
+    container_name: windsurf-db
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=windsurf
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - windsurf-network
+
+  # Redis for Caching and Message Queue
+  redis:
+    image: redis:6-alpine
+    container_name: windsurf-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - windsurf-network
+
+  # Prometheus for Metrics
+  prometheus:
+    image: prom/prometheus:v2.30.3
+    container_name: windsurf-prometheus
+    volumes:
+      - ./prometheus:/etc/prometheus
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    ports:
+      - "9090:9090"
+    networks:
+      - windsurf-network
+
+  # Grafana for Visualization
+  grafana:
+    image: grafana/grafana:8.2.0
+    container_name: windsurf-grafana
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - grafana_data:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+    networks:
+      - windsurf-network
+
+volumes:
+  postgres_data:
+  redis_data:
+  model_registry:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  windsurf-network:
+    driver: bridge

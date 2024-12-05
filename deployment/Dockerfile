@@ -1,0 +1,42 @@
+# Use multi-stage build for smaller final image
+FROM python:3.9-slim as builder
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set working directory
+WORKDIR /app
+
+# Install Python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Second stage
+FROM python:3.9-slim
+
+# Copy installed packages from builder
+COPY --from=builder /usr/local/lib/python3.9/site-packages /usr/local/lib/python3.9/site-packages
+
+# Set working directory
+WORKDIR /app
+
+# Copy application code
+COPY src/ src/
+COPY alembic/ alembic/
+COPY alembic.ini .
+
+# Create model registry directory
+RUN mkdir -p /app/model_registry
+
+# Set environment variables
+ENV PYTHONPATH=/app
+ENV MODEL_REGISTRY_PATH=/app/model_registry
+
+# Expose port
+EXPOSE 8000
+
+# Run migrations and start application
+CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -1,0 +1,40 @@
+{
+  "name": "CatBoostClassifier",
+  "type": "classification",
+  "parameters": {
+    "model_type": "catboost",
+    "iterations": 58,
+    "depth": 6,
+    "learning_rate": 0.10108521961057428,
+    "l2_leaf_reg": 1.8514500957644098
+  },
+  "metrics": {
+    "accuracy": 0.98,
+    "precision": 0.9808791208791209,
+    "recall": 0.98,
+    "f1": 0.9800445389209435
+  },
+  "feature_names": [
+    "خاصية_1",
+    "خاصية_2",
+    "خاصية_3",
+    "خاصية_4",
+    "خاصية_5"
+  ],
+  "target_name": "الهدف",
+  "target_type": "int32",
+  "training_date": "2024-12-05 19:20:24",
+  "file_path": "models\\CatBoostClassifier_20241205_192024.joblib",
+  "target_values": [
+    "0",
+    "1"
+  ],
+  "target_statistics": {
+    "mean": 0.498,
+    "std": 0.5002461856388775,
+    "min": 0.0,
+    "max": 1.0,
+    "unique_values": 2,
+    "is_numeric": true
+  }
+}

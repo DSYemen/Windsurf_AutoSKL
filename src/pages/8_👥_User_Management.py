@@ -7,8 +7,10 @@ import hashlib
 import secrets
 import jwt
 from datetime import datetime, timedelta
+from src.utils.rtl_utils import apply_arabic_config
 
-st.set_page_config(page_title="User Management", page_icon="👥", layout="wide")
+# تطبيق التكوين العربي
+apply_arabic_config(title="إدارة المستخدمين", icon="👥")
 
 # Constants
 USERS_FILE = Path("data/users.json")

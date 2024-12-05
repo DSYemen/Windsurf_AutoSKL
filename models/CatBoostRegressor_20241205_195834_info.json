@@ -1,0 +1,38 @@
+{
+  "name": "CatBoostRegressor",
+  "type": "regression",
+  "parameters": {
+    "model_type": "catboost",
+    "iterations": 291,
+    "depth": 5,
+    "learning_rate": 0.2702053809123951,
+    "l2_leaf_reg": 0.2055206137523873
+  },
+  "metrics": {
+    "r2": 0.9977720650290325,
+    "mse": 69.68003017196457,
+    "rmse": 8.347456509138851,
+    "mae": 5.844850775863906
+  },
+  "feature_names": [
+    "خاصية_1",
+    "خاصية_2",
+    "خاصية_3",
+    "خاصية_4",
+    "خاصية_5",
+    "خاصية_6",
+    "خاصية_7"
+  ],
+  "target_name": "الهدف",
+  "target_type": "float64",
+  "training_date": "2024-12-05 19:58:34",
+  "file_path": "models\\CatBoostRegressor_20241205_195834.joblib",
+  "target_statistics": {
+    "mean": 0.6981287417276073,
+    "std": 175.16631509790997,
+    "min": -706.023850624132,
+    "max": 628.0388299353384,
+    "unique_values": 10000,
+    "is_numeric": true
+  }
+}

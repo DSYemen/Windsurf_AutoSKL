@@ -52,3 +52,4 @@ skl2onnx>=1.15.3
 onnxruntime>=1.14.1
 sqlalchemy>=2.0.0
 python-multipart>=0.0.9
+weasyprint>=63.0

@@ -1,3 +1,0 @@
-"""
-AutoSKL UI Component Library
-"""

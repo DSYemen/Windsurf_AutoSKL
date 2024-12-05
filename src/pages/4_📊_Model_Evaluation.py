@@ -1,57 +1,41 @@
+from src.utils.rtl_utils import apply_arabic_config
 import streamlit as st
 import pandas as pd
 import numpy as np
-import json
-import matplotlib
-matplotlib.use('Agg')  # Set backend before importing pyplot
-import matplotlib.pyplot as plt
-from sklearn.metrics import confusion_matrix, classification_report, accuracy_score, precision_score, recall_score, f1_score, r2_score, mean_absolute_error, mean_squared_error
-from sklearn.metrics import roc_curve, auc, precision_recall_curve
 import plotly.express as px
 import plotly.graph_objects as go
-from sklearn.model_selection import cross_val_score
-import shap
+from sklearn.metrics import (
+    accuracy_score, precision_score, recall_score, f1_score,
+    mean_squared_error, mean_absolute_error, r2_score,
+    confusion_matrix, roc_curve, auc, silhouette_score, calinski_harabasz_score, davies_bouldin_score
+)
+import joblib
+import json
+import os
 from datetime import datetime
+from sklearn.metrics import precision_recall_curve, classification_report
 
-st.set_page_config(page_title="Model Evaluation", page_icon="📊", layout="wide")
-
-def load_model_data():
-    if "current_model" not in st.session_state:
-        st.error("Please train a model first!")
-        st.stop()
-    return st.session_state.current_model
-
-def plot_confusion_matrix(y_true, y_pred, classes):
-    # Compute confusion matrix
-    cm = confusion_matrix(y_true, y_pred)
+# دوال الرسم البياني
+def plot_confusion_matrix(cm, labels=None):
+    """رسم مصفوفة الارتباك"""
+    if labels is None:
+        labels = ['0', '1']
     
-    # Create labels for the confusion matrix
-    labels = [str(c) for c in classes]
-    
-    # Create figure
     fig = go.Figure(data=go.Heatmap(
         z=cm,
         x=labels,
         y=labels,
-        colorscale='Blues',
-        showscale=True,
+        colorscale='RdBu',
         text=cm,
         texttemplate="%{text}",
         textfont={"size": 16},
         hoverongaps=False
     ))
     
-    # Update layout
     fig.update_layout(
-        title='Confusion Matrix',
-        xaxis=dict(
-            title='Predicted',
-            side='bottom'
-        ),
-        yaxis=dict(
-            title='Actual',
-            autorange='reversed'  # This ensures the matrix is shown in the correct orientation
-        ),
+        title="مصفوفة الارتباك",
+        xaxis_title="التنبؤات",
+        yaxis_title="القيم الحقيقية",
         width=600,
         height=600
     )
@@ -59,313 +43,395 @@ def plot_confusion_matrix(y_true, y_pred, classes):
     return fig
 
 def plot_roc_curve(y_true, y_prob):
-    if y_prob.shape[1] == 2:  # Binary classification
-        fpr, tpr, _ = roc_curve(y_true, y_prob[:, 1])
-        auc_score = auc(fpr, tpr)
-        
-        fig = go.Figure()
-        fig.add_trace(
-            go.Scatter(
-                x=fpr, y=tpr,
-                name=f'ROC curve (AUC = {auc_score:.2f})',
-                mode='lines'
-            )
-        )
-        
-    else:  # Multiclass classification
-        fig = go.Figure()
-        for i in range(y_prob.shape[1]):
-            fpr, tpr, _ = roc_curve(y_true == i, y_prob[:, i])
-            auc_score = auc(fpr, tpr)
-            
-            fig.add_trace(
-                go.Scatter(
-                    x=fpr, y=tpr,
-                    name=f'Class {i} (AUC = {auc_score:.2f})',
-                    mode='lines'
-                )
-            )
+    """رسم منحنى ROC"""
+    fpr, tpr, _ = roc_curve(y_true, y_prob)
+    roc_auc = auc(fpr, tpr)
     
-    fig.add_trace(
-        go.Scatter(
-            x=[0, 1], y=[0, 1],
-            name='Random',
-            mode='lines',
-            line=dict(dash='dash', color='gray')
-        )
-    )
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=fpr, y=tpr,
+        mode='lines',
+        name=f'ROC (AUC = {roc_auc:.3f})'
+    ))
+    
+    fig.add_trace(go.Scatter(
+        x=[0, 1], y=[0, 1],
+        mode='lines',
+        name='Random',
+        line=dict(dash='dash', color='gray')
+    ))
     
     fig.update_layout(
-        title='Receiver Operating Characteristic (ROC) Curve',
-        xaxis_title='False Positive Rate',
-        yaxis_title='True Positive Rate',
-        showlegend=True
+        title='منحنى ROC',
+        xaxis_title='معدل الإيجابيات الخاطئة',
+        yaxis_title='معدل الإيجابيات الصحيحة',
+        width=700,
+        height=500
+    )
+    
+    return fig
+
+def plot_precision_recall_curve(y_true, y_prob):
+    """رسم منحنى الدقة-الاسترجاع"""
+    precision, recall, _ = precision_recall_curve(y_true, y_prob)
+
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=recall, y=precision,
+        name='منحنى الدقة-الاسترجاع',
+        mode='lines'
+    ))
+
+    fig.update_layout(
+        title='منحنى الدقة-الاسترجاع',
+        xaxis_title='الاسترجاع',
+        yaxis_title='الدقة',
+        width=700,
+        height=500,
+        hovermode='closest'
     )
     return fig
 
-# Main layout
-st.title("📊 Model Evaluation")
-
-# Load model
-model_data = load_model_data()
-if model_data:
-    model = model_data['model']
-    metrics = model_data.get('metrics', {})
+def plot_residuals(y_true, y_pred):
+    """رسم البواقي"""
+    residuals = y_true - y_pred
     
-    # Get data
-    X = st.session_state.processed_data.drop(columns=[st.session_state.target])
-    y = st.session_state.processed_data[st.session_state.target]
-    
-    # Make predictions
-    y_pred = model.predict(X)
-    
-    # Determine problem type
-    is_classifier = hasattr(model, 'classes_')
-    
-    # Create columns for layout
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        if is_classifier:
-            st.subheader("Classification Metrics")
-            
-            # Display metrics
-            metrics_df = pd.DataFrame({
-                'Metric': ['Accuracy', 'Precision', 'Recall', 'F1-Score'],
-                'Value': [
-                    accuracy_score(y, y_pred),
-                    precision_score(y, y_pred, average='weighted'),
-                    recall_score(y, y_pred, average='weighted'),
-                    f1_score(y, y_pred, average='weighted')
-                ]
-            })
-            st.dataframe(metrics_df, use_container_width=True)
-            
-            # Confusion Matrix
-            st.subheader("Confusion Matrix")
-            st.plotly_chart(
-                plot_confusion_matrix(y, y_pred, model.classes_),
-                use_container_width=True
-            )
-            
-            # ROC Curve for classifiers with predict_proba
-            if hasattr(model, 'predict_proba'):
-                st.subheader("ROC Curve")
-                y_prob = model.predict_proba(X)
-                st.plotly_chart(plot_roc_curve(y, y_prob), use_container_width=True)
-        
-        else:
-            st.subheader("Regression Metrics")
-            
-            # Display metrics
-            metrics_df = pd.DataFrame({
-                'Metric': ['R² Score', 'MAE', 'MSE', 'RMSE'],
-                'Value': [
-                    r2_score(y, y_pred),
-                    mean_absolute_error(y, y_pred),
-                    mean_squared_error(y, y_pred),
-                    mean_squared_error(y, y_pred, squared=False)
-                ]
-            })
-            st.dataframe(metrics_df, use_container_width=True)
-            
-            # Actual vs Predicted Plot
-            st.subheader("Actual vs Predicted")
-            fig = px.scatter(
-                x=y, y=y_pred,
-                labels={'x': 'Actual Values', 'y': 'Predicted Values'},
-                title='Actual vs Predicted Values'
-            )
-            fig.add_trace(
-                go.Scatter(
-                    x=[y.min(), y.max()],
-                    y=[y.min(), y.max()],
-                    mode='lines',
-                    name='Perfect Prediction',
-                    line=dict(dash='dash', color='gray')
-                )
-            )
-            st.plotly_chart(fig, use_container_width=True)
-            
-            # Residuals Plot
-            st.subheader("Residuals Plot")
-            residuals = y - y_pred
-            fig = px.scatter(
-                x=y_pred, y=residuals,
-                labels={'x': 'Predicted Values', 'y': 'Residuals'},
-                title='Residuals Plot'
-            )
-            fig.add_hline(y=0, line_dash="dash", line_color="gray")
-            st.plotly_chart(fig, use_container_width=True)
-    
-    with col2:
-        # Feature Importance
-        if hasattr(model, 'feature_importances_'):
-            st.subheader("Feature Importance")
-            importance_df = pd.DataFrame({
-                'Feature': X.columns,
-                'Importance': model.feature_importances_
-            }).sort_values('Importance', ascending=False)
-            
-            fig = px.bar(
-                importance_df,
-                x='Importance',
-                y='Feature',
-                orientation='h',
-                title='Feature Importance'
-            )
-            st.plotly_chart(fig, use_container_width=True)
-        
-        # SHAP Values
-        if st.checkbox("Show SHAP Values"):
-            st.subheader("SHAP Values")
-            try:
-                # Create SHAP explainer
-                explainer = shap.TreeExplainer(model)
-                shap_values = explainer.shap_values(X)
-                
-                # Handle different types of SHAP values
-                if isinstance(shap_values, list):
-                    shap_values = shap_values[1] if is_classifier else shap_values
-                
-                # Create SHAP summary plot
-                plt.figure(figsize=(10, 6))
-                shap.summary_plot(
-                    shap_values,
-                    X,
-                    plot_type="bar",
-                    show=False
-                )
-                fig1 = plt.gcf()
-                st.pyplot(fig1)
-                plt.close(fig1)
-                
-                # Create SHAP beeswarm plot
-                plt.figure(figsize=(10, 6))
-                shap.summary_plot(
-                    shap_values,
-                    X,
-                    plot_type="dot",
-                    show=False
-                )
-                fig2 = plt.gcf()
-                st.pyplot(fig2)
-                plt.close(fig2)
-                
-                # Add SHAP force plot for first prediction
-                if st.checkbox("Show SHAP Force Plot"):
-                    st.subheader("SHAP Force Plot (First Prediction)")
-                    plt.figure(figsize=(10, 3))
-                    shap.force_plot(
-                        explainer.expected_value[1] if is_classifier else explainer.expected_value,
-                        shap_values[0],
-                        X.iloc[0],
-                        matplotlib=True,
-                        show=False
-                    )
-                    fig3 = plt.gcf()
-                    st.pyplot(fig3)
-                    plt.close(fig3)
-                    
-            except Exception as e:
-                st.error(f"Error calculating SHAP values: {str(e)}")
-        
-        # Model Parameters
-        st.subheader("Model Parameters")
-        st.json(model.get_params())
-        
-        # Download Model Report
-        st.subheader("Download Report")
-        if st.button("Generate Report"):
-            report = {
-                'model_type': type(model).__name__,
-                'parameters': model.get_params(),
-                'metrics': metrics,
-                'feature_importance': importance_df.to_dict() if hasattr(model, 'feature_importances_') else None,
-                'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            }
-            
-            st.download_button(
-                "Download Model Report",
-                json.dumps(report, indent=2),
-                file_name="model_report.json",
-                mime="application/json"
-            )
-
-# Sidebar
-with st.sidebar:
-    st.header("Evaluation Options")
-    
-    eval_type = st.radio(
-        "Evaluation Type",
-        ["Basic Metrics", "Cross Validation", "Feature Analysis"]
-    )
-
-# Main content
-if eval_type == "Basic Metrics":
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.subheader("Model Performance Metrics")
-        metrics_df = pd.DataFrame(
-            model_data['metrics'].items(),
-            columns=['Metric', 'Value']
-        )
-        st.dataframe(metrics_df, hide_index=True)
-        
-        if hasattr(model, 'predict_proba'):
-            st.subheader("ROC Curve")
-            y_prob = model.predict_proba(X)
-            st.plotly_chart(plot_roc_curve(y, y_prob), use_container_width=True)
-    
-    with col2:
-        if hasattr(model, 'classes_'):
-            st.subheader("Confusion Matrix")
-            y_pred = model.predict(X)
-            st.plotly_chart(
-                plot_confusion_matrix(y, y_pred, model.classes_),
-                use_container_width=True
-            )
-
-elif eval_type == "Cross Validation":
-    st.subheader("Cross Validation Results")
-    
-    n_folds = st.slider("Number of Folds", 3, 10, 5)
-    
-    with st.spinner("Performing cross validation..."):
-        cv_scores = cross_val_score(model, X, y, cv=n_folds)
-        
-        st.metric("Mean CV Score", f"{cv_scores.mean():.3f}")
-        st.metric("CV Score Std", f"{cv_scores.std():.3f}")
-        
-        fig = px.box(
-            cv_scores,
-            title="Cross Validation Scores Distribution"
-        )
-        st.plotly_chart(fig, use_container_width=True)
-
-else:  # Feature Analysis
-    st.subheader("Feature Importance Analysis")
-    
-    # Standard feature importance
-    st.plotly_chart(
-        px.bar(
-            x=model_data['feature_importance'].values,
-            y=model_data['feature_importance'].index,
-            orientation='h',
-            title="Feature Importance"
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=y_pred,
+        y=residuals,
+        mode='markers',
+        marker=dict(
+            size=8,
+            color='blue',
+            opacity=0.6
         ),
-        use_container_width=True
+        name='البواقي'
+    ))
+    
+    fig.add_hline(y=0, line_dash="dash", line_color="red")
+    
+    fig.update_layout(
+        title='مخطط البواقي',
+        xaxis_title='القيم المتنبأ بها',
+        yaxis_title='البواقي',
+        width=700,
+        height=500,
+        showlegend=True
     )
     
-    # SHAP values
-    if st.button("Calculate SHAP Values"):
-        with st.spinner("Calculating SHAP values..."):
-            explainer = shap.TreeExplainer(model)
-            shap_values = explainer.shap_values(X)
+    return fig
+
+def plot_actual_vs_predicted(y_true, y_pred):
+    """رسم القيم الحقيقية مقابل المتنبأ بها"""
+    fig = go.Figure()
+    
+    # إضافة نقاط البيانات
+    fig.add_trace(go.Scatter(
+        x=y_true,
+        y=y_pred,
+        mode='markers',
+        marker=dict(
+            size=8,
+            color='blue',
+            opacity=0.6
+        ),
+        name='البيانات'
+    ))
+    
+    # إضافة خط التطابق المثالي
+    min_val = min(min(y_true), min(y_pred))
+    max_val = max(max(y_true), max(y_pred))
+    fig.add_trace(go.Scatter(
+        x=[min_val, max_val],
+        y=[min_val, max_val],
+        mode='lines',
+        line=dict(color='red', dash='dash'),
+        name='التطابق المثالي'
+    ))
+    
+    fig.update_layout(
+        title='القيم الحقيقية مقابل المتنبأ بها',
+        xaxis_title='القيم الحقيقية',
+        yaxis_title='القيم المتنبأ بها',
+        width=700,
+        height=500,
+        showlegend=True
+    )
+    
+    return fig
+
+def plot_feature_importance(model, feature_names):
+    """رسم أهمية المتغيرات"""
+    # الحصول على أهمية المتغيرات
+    if hasattr(model, 'feature_importances_'):
+        importance = model.feature_importances_
+    elif hasattr(model, 'coef_'):
+        importance = np.abs(model.coef_[0]) if len(model.coef_.shape) > 1 else np.abs(model.coef_)
+    else:
+        return None
+    
+    # ترتيب المتغيرات حسب الأهمية
+    feature_importance = pd.DataFrame({
+        'feature': feature_names,
+        'importance': importance
+    })
+    feature_importance = feature_importance.sort_values('importance', ascending=True)
+    
+    # إنشاء الرسم البياني
+    fig = go.Figure()
+    fig.add_trace(go.Bar(
+        y=feature_importance['feature'],
+        x=feature_importance['importance'],
+        orientation='h',
+        marker_color='blue'
+    ))
+    
+    fig.update_layout(
+        title='أهمية المتغيرات',
+        xaxis_title='الأهمية',
+        yaxis_title='المتغيرات',
+        width=800,
+        height=max(400, len(feature_names) * 25),
+        showlegend=False
+    )
+    
+    return fig
+
+# تطبيق التكوين العربي
+apply_arabic_config(title="تقييم النموذج", icon="📊")
+
+# التحقق من وجود النموذج والبيانات
+def load_model_and_data():
+    try:
+        # التحقق من وجود النموذج النشط
+        if 'active_model' not in st.session_state:
+            st.warning("⚠️ الرجاء اختيار نموذج أولاً من صفحة سجل النماذج")
+            if st.button("📚 الانتقال إلى سجل النماذج"):
+                st.switch_page("pages/7_📚_Model_Registry.py")
+            return None, None, None
             
-            if isinstance(shap_values, list):
-                shap_values = shap_values[1]
+        active_model = st.session_state.active_model
+        model_path = active_model['path']
+        
+        if not os.path.exists(model_path):
+            st.error("❌ النموذج المحدد غير موجود")
+            return None, None, None
             
-            st.pyplot(shap.summary_plot(shap_values, X, plot_type="bar", show=False))
-            st.pyplot(shap.summary_plot(shap_values, X, show=False))
+        # تحميل النموذج ومعلوماته
+        try:
+            model = joblib.load(model_path)
+            model_info = active_model['info']
+        except Exception as e:
+            st.error(f"❌ فشل في تحميل النموذج: {str(e)}")
+            return None, None, None
+            
+        # التحقق من وجود البيانات
+        if 'data' not in st.session_state:
+            st.warning("⚠️ الرجاء تحميل البيانات أولاً من صفحة إدارة البيانات")
+            if st.button("📊 الانتقال إلى إدارة البيانات"):
+                st.switch_page("pages/1_📊_Data_Management.py")
+            return None, None, None
+            
+        df = st.session_state.data
+        
+        # التحقق من وجود الأعمدة المطلوبة
+        required_features = model_info.get('features', [])
+        if not required_features:
+            required_features = model_info.get('feature_names', [])
+            
+        if not all(col in df.columns for col in required_features):
+            st.error("❌ البيانات المحملة لا تحتوي على جميع المتغيرات المطلوبة للنموذج")
+            st.write("المتغيرات المطلوبة:", ", ".join(required_features))
+            st.write("المتغيرات الموجودة:", ", ".join(df.columns))
+            return None, None, None
+            
+        return model, model_info, df
+        
+    except Exception as e:
+        st.error(f"❌ حدث خطأ أثناء تحميل النموذج والبيانات: {str(e)}")
+        return None, None, None
+
+# تحميل النموذج والبيانات
+model, model_info, df = load_model_and_data()
+
+# التحقق من صحة النموذج والبيانات
+if model is not None and model_info is not None and df is not None and not df.empty:
+    # تكوين النمط
+    st.markdown("""
+        <style>
+        .main { padding: 0rem 1rem; }
+        .metric-card {
+            background-color: #f8f9fa;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            margin-bottom: 1rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+        }
+        .stAlert {
+            padding: 1rem;
+            margin-bottom: 1rem;
+            border-radius: 0.5rem;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+
+    # التخطيط الرئيسي
+    st.title("📊 تقييم النموذج")
+
+    # تحضير البيانات للتقييم
+    features = model_info.get('features', [])
+    if not features:
+        features = model_info.get('feature_names', [])
+        
+    X = df[features]
+    target = model_info.get('target', '')
+    if not target:
+        target = model_info.get('target_name', '')
+        
+    if target in df.columns:
+        y_true = df[target]
+    else:
+        st.warning("⚠️ عمود الهدف غير موجود في البيانات")
+        y_true = None
+
+    # التنبؤ
+    if y_true is not None:
+        y_pred = model.predict(X)
+
+        # حساب وعرض المقاييس حسب نوع التعلم
+        model_type = model_info.get('type', '').lower()
+        
+        if model_type == 'تصنيف' or model_type == 'classification':
+            # مقاييس التصنيف
+            metrics = {
+                'الدقة': accuracy_score(y_true, y_pred),
+                'الضبط': precision_score(y_true, y_pred, average='weighted'),
+                'الاسترجاع': recall_score(y_true, y_pred, average='weighted'),
+                'F1': f1_score(y_true, y_pred, average='weighted')
+            }
+
+            # عرض المقاييس
+            st.write("### 📈 مقاييس الأداء")
+            cols = st.columns(len(metrics))
+            for col, (metric_name, value) in zip(cols, metrics.items()):
+                col.metric(metric_name, f"{value:.4f}")
+
+            # مصفوفة الارتباك
+            cm = confusion_matrix(y_true, y_pred)
+            st.plotly_chart(plot_confusion_matrix(cm), use_container_width=True)
+
+            # منحنيات ROC و Precision-Recall للتصنيف الثنائي
+            if len(np.unique(y_true)) == 2 and hasattr(model, 'predict_proba'):
+                y_prob = model.predict_proba(X)[:, 1]
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.plotly_chart(plot_roc_curve(y_true, y_prob), use_container_width=True)
+                with col2:
+                    st.plotly_chart(plot_precision_recall_curve(y_true, y_prob), use_container_width=True)
+
+            # تقرير التصنيف
+            st.write("### 📑 تقرير التصنيف التفصيلي")
+            report = classification_report(y_true, y_pred, output_dict=True)
+            report_df = pd.DataFrame(report).transpose()
+            st.dataframe(report_df)
+            
+        elif model_type == 'انحدار' or model_type == 'regression':
+            # مقاييس الانحدار
+            metrics = {
+                'R²': r2_score(y_true, y_pred),
+                'MSE': mean_squared_error(y_true, y_pred),
+                'RMSE': np.sqrt(mean_squared_error(y_true, y_pred)),
+                'MAE': mean_absolute_error(y_true, y_pred)
+            }
+
+            # عرض المقاييس
+            st.write("### 📈 مقاييس الأداء")
+            cols = st.columns(len(metrics))
+            for col, (metric_name, value) in zip(cols, metrics.items()):
+                col.metric(metric_name, f"{value:.4f}")
+
+            # رسوم بيانية للتحليل
+            col1, col2 = st.columns(2)
+            with col1:
+                st.plotly_chart(plot_actual_vs_predicted(y_true, y_pred), use_container_width=True)
+            with col2:
+                st.plotly_chart(plot_residuals(y_true, y_pred), use_container_width=True)
+                
+        elif model_type == 'تجميع' or model_type == 'clustering':
+            from sklearn.metrics import silhouette_score, calinski_harabasz_score, davies_bouldin_score
+            
+            # مقاييس التجميع
+            try:
+                metrics = {
+                    'معامل سيلويت': silhouette_score(X, y_pred),
+                    'معامل كالينسكي-هارباز': calinski_harabasz_score(X, y_pred),
+                    'معامل ديفيز-بولدن': davies_bouldin_score(X, y_pred)
+                }
+            except Exception as e:
+                st.error(f"❌ خطأ في حساب مقاييس التجميع: {str(e)}")
+                metrics = {}
+
+            if metrics:
+                # عرض المقاييس
+                st.write("### 📈 مقاييس الأداء")
+                cols = st.columns(len(metrics))
+                for col, (metric_name, value) in zip(cols, metrics.items()):
+                    col.metric(metric_name, f"{value:.4f}")
+
+            # عرض توزيع المجموعات
+            st.write("### 🎯 توزيع المجموعات")
+            cluster_counts = pd.Series(y_pred).value_counts().sort_index()
+            fig = go.Figure(data=[
+                go.Bar(x=[f"مجموعة {i}" for i in cluster_counts.index],
+                      y=cluster_counts.values)
+            ])
+            fig.update_layout(
+                title="توزيع النقاط على المجموعات",
+                xaxis_title="المجموعة",
+                yaxis_title="عدد النقاط",
+                width=700,
+                height=400
+            )
+            st.plotly_chart(fig, use_container_width=True)
+            
+        else:
+            st.error(f"❌ نوع التعلم غير معروف: {model_type}")
+            st.stop()
+
+        # تحليل الأخطاء (للتصنيف والانحدار فقط)
+        if model_type in ['تصنيف', 'classification', 'انحدار', 'regression']:
+            st.write("### 🔍 تحليل الأخطاء")
+            error_df = pd.DataFrame({
+                'القيم الحقيقية': y_true,
+                'القيم المتنبأ بها': y_pred,
+                'الخطأ': np.abs(y_true - y_pred) if model_type in ['انحدار', 'regression'] else y_true != y_pred
+            })
+            error_df = error_df.sort_values('الخطأ', ascending=False).head(10)
+            st.dataframe(error_df)
+
+        # أهمية المتغيرات (إذا كان متاحاً)
+        if hasattr(model, 'feature_importances_') or hasattr(model, 'coef_'):
+            st.write("### 🎯 أهمية المتغيرات")
+            feature_importance_fig = plot_feature_importance(model, features)
+            if feature_importance_fig:
+                st.plotly_chart(feature_importance_fig, use_container_width=True)
+
+        # تصدير النتائج
+        if st.button("📥 تصدير نتائج التقييم"):
+            evaluation_results = {
+                'model_info': model_info,
+                'metrics': metrics,
+                'evaluation_date': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                'error_analysis': error_df.to_dict()
+            }
+
+            results_path = os.path.join(
+                "models",
+                f"evaluation_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+            )
+
+            with open(results_path, 'w', encoding='utf-8') as f:
+                json.dump(evaluation_results, f, ensure_ascii=False, indent=4)
+
+            st.success(f"✅ تم حفظ نتائج التقييم في: {results_path}")

@@ -1,0 +1,41 @@
+{
+    "name": "Random Forest",
+    "type": "انحدار",
+    "features": [
+        "خاصية_1",
+        "خاصية_2",
+        "خاصية_3",
+        "خاصية_4",
+        "خاصية_5",
+        "خاصية_6",
+        "خاصية_7"
+    ],
+    "target": "الهدف",
+    "parameters": {
+        "bootstrap": true,
+        "ccp_alpha": 0.0,
+        "criterion": "squared_error",
+        "max_depth": 10,
+        "max_features": 1.0,
+        "max_leaf_nodes": null,
+        "max_samples": null,
+        "min_impurity_decrease": 0.0,
+        "min_samples_leaf": 1,
+        "min_samples_split": 2,
+        "min_weight_fraction_leaf": 0.0,
+        "monotonic_cst": null,
+        "n_estimators": 100,
+        "n_jobs": null,
+        "oob_score": false,
+        "random_state": 42,
+        "verbose": 0,
+        "warm_start": false
+    },
+    "metrics": {
+        "mse": 2942.546966335685,
+        "rmse": 54.24524832956049,
+        "mae": 42.24104885273114,
+        "r2": 0.9059156077597211
+    },
+    "training_date": "2024-12-05 19:41:11"
+}

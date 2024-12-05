@@ -1,0 +1,76 @@
+/* تطبيق اتجاه RTL للواجهة بالكامل */
+body {
+    direction: rtl;
+    text-align: right;
+    font-family: 'Cairo', sans-serif;
+}
+
+/* تعديل اتجاه القوائم الجانبية */
+.css-1d391kg {
+    left: auto !important;
+    right: 0 !important;
+}
+
+/* تعديل هوامش العناصر */
+.stButton, .stSelectbox, .stTextInput, .stNumberInput {
+    margin-right: 0 !important;
+    margin-left: 1rem !important;
+}
+
+/* تعديل اتجاه الجداول */
+.dataframe {
+    text-align: right !important;
+}
+
+/* تعديل اتجاه الرسوم البيانية */
+.plotly-graph-div {
+    direction: ltr;
+}
+
+/* تعديل اتجاه القوائم المنسدلة */
+.streamlit-expanderHeader {
+    text-align: right !important;
+}
+
+/* تعديل اتجاه الأزرار */
+.stButton > button {
+    float: right;
+}
+
+/* تعديل اتجاه التنبيهات */
+.stAlert {
+    text-align: right !important;
+}
+
+/* تعديل اتجاه العناوين */
+h1, h2, h3, h4, h5, h6 {
+    text-align: right !important;
+}
+
+/* تعديل اتجاه المؤشرات */
+.stMetric {
+    text-align: right !important;
+}
+
+/* تعديل الهوامش للعناصر المتداخلة */
+.element-container {
+    padding-right: 0 !important;
+    padding-left: 1rem !important;
+}
+
+/* تعديل اتجاه علامات التبويب */
+.stTabs [data-baseweb="tab-list"] {
+    direction: rtl;
+}
+
+/* تعديل اتجاه الشريط الجانبي */
+section[data-testid="stSidebar"] {
+    direction: rtl;
+    text-align: right;
+}
+
+/* تعديل اتجاه عناصر التحكم في النماذج */
+.stSlider, .stCheckbox {
+    direction: rtl;
+    text-align: right;
+}

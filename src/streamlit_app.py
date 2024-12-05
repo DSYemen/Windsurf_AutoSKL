@@ -6,32 +6,23 @@ import pandas as pd
 
 # Configure the Streamlit page
 st.set_page_config(
-    page_title="Windsurf AutoSKL Dashboard",
-    page_icon="🌊",
+    page_title="التعلم الآلي التلقائي",
+    page_icon="⚡",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS
+# Add custom CSS
+with open('static/css/rtl.css') as f:
+    st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
+
+# Add Cairo font
 st.markdown("""
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@200;300;400;600;700;900&display=swap" rel="stylesheet">
     <style>
-        .main {
-            padding-top: 2rem;
-        }
-        .stMetric {
-            background-color: #f8f9fa;
-            padding: 1rem;
-            border-radius: 0.5rem;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.12);
-        }
-        .plot-container {
-            background-color: white;
-            padding: 1rem;
-            border-radius: 0.5rem;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.12);
-        }
+        * {font-family: 'Cairo', sans-serif !important;}
     </style>
-""", unsafe_allow_html=True)
+    """, unsafe_allow_html=True)
 
 # Sidebar
 with st.sidebar:
